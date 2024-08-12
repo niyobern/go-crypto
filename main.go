@@ -1,12 +1,14 @@
 package main
 
 import (
+	"arbitrage/order"
+	"arbitrage/utils"
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -21,15 +23,31 @@ type PriceInfo struct {
 	Market string
 }
 
-func order() {
+const CAPITAL = 1000.0
+
+func main() {
 	tickers := make(chan TickerGeneral)
+	orders := make(chan order.Order)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
+
+	db, err := utils.Database("orderdb")
+    if err != nil {
+        log.Fatal("Failed to open LevelDB:", err)
+    }
+    defer db.Close()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		okx(ctx, tickers)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		go order.Binance(orders, "MARGIN", 10000, "BTC-USDT")
 	}()
 
 	wg.Add(1)
@@ -74,10 +92,15 @@ func order() {
 
 			// Check for arbitrage opportunities
 			if len(prices[ticker.InstId]) > 1 {
-				checkArbitrage(ticker.InstId, prices[ticker.InstId])
+				checkArbitrage(ticker.InstId, prices[ticker.InstId], orders)
 			}
-            checkTriangularArbitrage(prices)
 			mu.Unlock()
+		}
+	}()
+
+	go func (){
+		for order := range orders {
+			fmt.Println(order)
 		}
 	}()
 
@@ -86,7 +109,7 @@ func order() {
 	log.Println("shutting down")
 }
 
-func checkArbitrage(instId string, priceInfos map[string]PriceInfo) {
+func checkArbitrage(instId string, priceInfos map[string]PriceInfo, orders chan order.Order) {
 	var minPrice, maxPrice PriceInfo
 	first := true
 	for _, priceInfo := range priceInfos {
@@ -105,61 +128,29 @@ func checkArbitrage(instId string, priceInfos map[string]PriceInfo) {
 	}
 
 	if minPrice.Market != maxPrice.Market {
-        fees := 0.1 // Assume 0.1% fees for each trade
-        gain := (maxPrice.Price - minPrice.Price ) * 100 / minPrice.Price
-		profit := gain - (fees * 2)
-		coeficient := 2000 / (minPrice.Price + (0.001 * minPrice.Price))
-		sellValue := coeficient * (maxPrice.Price - (0.001 * maxPrice.Price))
-		if minPrice.Market == "BINANCE" {
-            log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for profit %.2f%%, for 2000 USDT, get %.2f\n",
-			instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, profit, sellValue)
-        }
-	}
-}
-
-
-func checkTriangularArbitrage(prices map[string]map[string]PriceInfo) {
-	for instId1, markets1 := range prices {
-		for instId2, markets2 := range prices {
-			if instId1 == instId2 {
-				continue
-			}
-
-			base1, quote1 := parseInstId(instId1)
-			base2, quote2 := parseInstId(instId2)
-
-			if base1 == quote2 {
-				for instId3, markets3 := range prices {
-					if instId3 == instId1 || instId3 == instId2 {
-						continue
-					}
-
-					base3, quote3 := parseInstId(instId3)
-
-					if base3 == quote1 && quote3 == base2 {
-						// We have base1 -> quote1, base1 -> base2 (base2 == quote2), quote1 -> base2 (quote1 == base3)
-						for _, price1 := range markets1 {
-							for _, price2 := range markets2 {
-								for _, price3 := range markets3 {
-									profit := 1 / price1.Price * price2.Price * price3.Price
-									if profit > 1 {
-										log.Printf("Triangular arbitrage opportunity: %s -> %s -> %s -> %s with profit %.2f%%\n",
-											instId1, instId2, instId3, instId1, (profit-1)*100)
-									}
-								}
-							}
-						}
-					}
-				}
-			}
+        fees := 0.0015 // Assume 0.1% fees for each trade
+		coeficient := CAPITAL / (minPrice.Price + (fees * minPrice.Price))
+		sellValue := coeficient * (maxPrice.Price - (fees * maxPrice.Price))
+		final := sellValue - 2
+		if final > 1002 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN"  {
+			makeOrders(orders, instId, "BINANCE", "KUCOIN", coeficient*1.25)
+			// log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for profit %.2f%%, for 1000 USDT, get %.2f\n",
+			// instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, profit, final)
 		}
 	}
 }
 
-func parseInstId(instId string) (string, string) {
-	parts := strings.Split(instId, "-")
-	if len(parts) != 2 {
-		return "", ""
+func makeOrders(orders chan order.Order, instId string, buyMarket string, sellMarket string, sellAmount float64){
+	switch buyMarket {
+		case "BINANCE":
+			go order.Binance(orders, "SPOT", CAPITAL, instId)
+		case "KUCOIN":
+			go order.Kucoin(instId, sellAmount)
 	}
-	return parts[0], parts[1]
+	switch sellMarket {
+		case "BINANCE":
+			go order.Binance(orders, "MARGIN", sellAmount, instId)
+		case "KUCOIN":
+			go order.Kucoin(instId, CAPITAL)
+	}
 }

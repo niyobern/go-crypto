@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"arbitrage/utils"
 	"log"
 	"github.com/gorilla/websocket"
 )
@@ -13,9 +14,13 @@ type BinanceTicker struct {
 	Price     string `json:"c"`
 }
 
+
+
 func binance(ctx context.Context, tickers chan TickerGeneral) {
+
+    trie := utils.Initialize()
 	// Binance WebSocket endpoint for ticker data
-	endpoint := "wss://stream.binance.com:9443/ws/!ticker@arr"
+	endpoint := "wss://stream.binance.com:9443/ws/!miniTicker@arr"
 
 	// Connect to the WebSocket
 	c, _, err := websocket.DefaultDialer.Dial(endpoint, nil)
@@ -25,6 +30,7 @@ func binance(ctx context.Context, tickers chan TickerGeneral) {
 	defer c.Close()
 
 	done := make(chan struct{})
+
 	go func() {
 		defer close(done)
 		for {
@@ -41,12 +47,16 @@ func binance(ctx context.Context, tickers chan TickerGeneral) {
 				var tickersData []BinanceTicker
 				err = json.Unmarshal(message, &tickersData)
 				if err != nil {
-					log.Fatal("decode error binance")
+					log.Println("decode error binance", err)
 				}
 				for _, ticker := range tickersData {
+					symbol := utils.GetQuote(ticker.Symbol, trie)
+					if symbol == "" {
+						continue
+					}
 					tickers <- TickerGeneral{
 						Price:  ticker.Price,
-						InstId: ticker.Symbol,
+						InstId: symbol,
 						Market: "binance",
 					}
 				}
