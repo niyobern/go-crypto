@@ -47,14 +47,14 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		go order.Binance(orders, "MARGIN", 10000, "BTC-USDT")
+		go testKucoin(ctx, tickers)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		kucoin(ctx, tickers)
-	}()
+	// wg.Add(1)
+	// go func() {
+	// 	defer wg.Done()
+	// 	kucoin(ctx, tickers)
+	// }()
 
 	wg.Add(1)
 	go func () {
@@ -133,9 +133,9 @@ func checkArbitrage(instId string, priceInfos map[string]PriceInfo, orders chan 
 		sellValue := coeficient * (maxPrice.Price - (fees * maxPrice.Price))
 		final := sellValue - 2
 		if final > 1002 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN"  {
-			makeOrders(orders, instId, "BINANCE", "KUCOIN", coeficient*1.25)
-			// log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for profit %.2f%%, for 1000 USDT, get %.2f\n",
-			// instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, profit, final)
+			makeOrders(orders, instId, "BINAooooNCE", "KUoooCOIN", coeficient*1.25)
+			log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for 1000 USDT, get %.2f\n",
+			instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, final)
 		}
 	}
 }
@@ -145,12 +145,12 @@ func makeOrders(orders chan order.Order, instId string, buyMarket string, sellMa
 		case "BINANCE":
 			go order.Binance(orders, "SPOT", CAPITAL, instId)
 		case "KUCOIN":
-			go order.Kucoin(instId, sellAmount)
+			go order.Kucoin("MARGIN", instId, sellAmount)
 	}
 	switch sellMarket {
 		case "BINANCE":
 			go order.Binance(orders, "MARGIN", sellAmount, instId)
 		case "KUCOIN":
-			go order.Kucoin(instId, CAPITAL)
+			go order.Kucoin("SPOT", instId, CAPITAL)
 	}
 }

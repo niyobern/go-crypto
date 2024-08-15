@@ -24,32 +24,109 @@ const (
 	baseURL       = "https://api.kucoin.com"
 )
 
-func Kucoin(symbol string, amount float64) {
-	// Define the order parameters
-	side := "sell"                   // Buy or sell
-	size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount of SOL to sell
-	autoBorrow := true  // Enable auto-borrowing for leverage
+func Kucoin(orderType string, symbol string, amount float64) {
+	if orderType == "SPOT" {
+		side := "buy" // Only buying is allowed for spot orders
+		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
 
-	// Create the order
-	orderID, err := createMarginOrder(symbol, side, size, autoBorrow)
-	if err != nil {
-		fmt.Printf("Error creating margin order: %v\n", err)
-	} else {
-		fmt.Printf("Order created successfully with ID: %s\n", orderID)
+		// Create the spot order
+		orderID, err := createSpotOrder(symbol, side, size)
+		if err != nil {
+			fmt.Printf("Error creating spot order: %v\n", err)
+		} else {
+			fmt.Printf("Spot order created successfully with ID: %s\n", orderID)
+		}
+	} else if orderType == "MARGIN" {
+		// Define the order parameters for margin selling
+		side := "sell"                   // Selling only
+		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to sell
+		autoBorrow := true  // Enable auto-borrowing for leverage
+
+		// Create the margin order
+		orderID, err := createMarginOrder(symbol, side, size, autoBorrow)
+		if err != nil {
+			fmt.Printf("Error creating margin order: %v\n", err)
+		} else {
+			fmt.Printf("Margin order created successfully with ID: %s\n", orderID)
+		}
 	}
 }
 
+func createSpotOrder(symbol, side, size string) (string, error) {
+	// Prepare the request payload for spot order
+	order := map[string]interface{}{
+		"clientOid": uuid.New().String(),
+		"symbol":    symbol,
+		"side":      side,
+		"type":      "market", // Market order type
+		"size":      size,
+	}
+
+	payload, err := json.Marshal(order)
+	if err != nil {
+		return "", err
+	}
+
+	// Create the request
+	endpoint := "/api/v1/orders"
+	url := baseURL + endpoint
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		return "", err
+	}
+
+	// Add headers
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
+	req.Header.Set("KC-API-KEY", apiKey)
+	req.Header.Set("KC-API-SIGN", signature)
+	req.Header.Set("KC-API-TIMESTAMP", timestamp)
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-KEY-VERSION", "2")
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// Read and parse the response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	log.Println(body)
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	// Check for errors in the response
+	if resp.StatusCode != http.StatusOK || result["code"] != "200000" {
+		return "", fmt.Errorf("error response: %s", string(body))
+	}
+
+	// Return the order ID
+	data := result["data"].(map[string]interface{})
+	return data["orderId"].(string), nil
+}
+
 func createMarginOrder(symbol, side, size string, autoBorrow bool) (string, error) {
-	// Prepare the request payload
+	// Prepare the request payload for margin order
 	order := map[string]interface{}{
 		"clientOid":     uuid.New().String(),
 		"symbol":        symbol,
 		"side":          side,
-		"type":          "market",  // Use "limit" order type, change to "market" if necessary
+		"type":          "market",
 		"size":          size,
-		"marginModel":     "cross",  // Specify margin model
+		"marginModel":   "cross",
 		"autoBorrow":    autoBorrow,
-		"tradeType":     "MARGIN_TRADE",  // Specify margin trade
+		"tradeType":     "MARGIN_TRADE",
 	}
 
 	payload, err := json.Marshal(order)
