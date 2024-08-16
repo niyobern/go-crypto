@@ -1,7 +1,9 @@
 package main
 
 import (
+	"arbitrage/balance"
 	"arbitrage/order"
+	"arbitrage/transfer"
 	"arbitrage/utils"
 	"context"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type TickerGeneral struct {
@@ -31,7 +34,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
-
+    
 	db, err := utils.Database("orderdb")
     if err != nil {
         log.Fatal("Failed to open LevelDB:", err)
@@ -50,11 +53,33 @@ func main() {
 		go testKucoin(ctx, tickers)
 	}()
 
-	// wg.Add(1)
-	// go func() {
-	// 	defer wg.Done()
-	// 	kucoin(ctx, tickers)
-	// }()
+	wg.Add(1)
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					otherCoin, err := balance.Binance()
+					if err != nil {
+						log.Fatalf("Error fetching Binance account info: %v", err)
+					}
+					for _, coin := range otherCoin {
+						if coin.Currency != "USDT" {
+							// pay the coin to the margin loan
+							transfer.BinanceSpot2Margin(coin.Currency, coin.Balance)
+							time.Sleep(20 * time.Second)
+							transfer.BinanceRepayMarginLoan(coin.Currency, coin.Balance)
+						}
+					}
+					transfer.BinanceMargin2Spot("USDT", CAPITAL)
+					transfer.KucoinMargin2sppt("USDT", CAPITAL)
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}()
 
 	wg.Add(1)
 	go func () {

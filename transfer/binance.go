@@ -2,9 +2,11 @@ package transfer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
-    "errors"
+	"sort"
+	"strconv"
 
 	"github.com/adshao/go-binance/v2"
 )
@@ -86,7 +88,7 @@ func Binance2Kucoin() {
 	fmt.Printf("Funds transferred successfully. Withdrawal ID: %s\n", withdrawalID)
 }
 
-func BinanceDepositAdress(coin string) (DepositAdress, error){
+func BinanceDepositAdress(coin, failedNetwork string) (DepositAdress, error){
     client := binance.NewClient(binanceAPIKey, binanceAPIKey)
 
     coins, err := client.NewGetAllCoinsInfoService().Do(context.Background())
@@ -95,19 +97,50 @@ func BinanceDepositAdress(coin string) (DepositAdress, error){
     }
 
     var chain string
-
+    
     for _, c := range coins{
         if c.Coin == coin {
+            type FeeInfo struct {
+                Network string
+                Fee      float64
+            }
+            fees := []FeeInfo{}
             for _, network := range c.NetworkList {
-                if network.WithdrawEnable && network.IsDefault {
-                    chain = network.Network
+                if network.WithdrawEnable{
+                    fee, err := strconv.ParseFloat(network.WithdrawFee, 64)
+                    if err != nil {
+                        fmt.Println("error converting string to float64:", err)
+                        continue
+                    }
+                    fees = append(fees, FeeInfo{Network: network.Network, Fee: fee})
                 }
+            }
+            sort.Slice(fees, func(i, j int) bool {
+                return fees[i].Fee < fees[j].Fee
+            })
+            findNetworkIndex := func(Network string) int {
+                for i, feeInfo := range fees {
+                    if feeInfo.Network == Network {
+                        return i
+                    }
+                }
+                return -1 // Return -1 if the Network is not found
+            }
+            index := findNetworkIndex(failedNetwork)
+            if index >= len(fees)-1 {
+                err := errors.New("no network found")
+                return DepositAdress{}, err
+            }
+            if index == -1 {
+                chain = fees[0].Network
+            } else {
+                chain = fees[index+1].Network
             }
         }
     }
 
     if chain == ""{
-        err := errors.New("No network found")
+        err := errors.New("no network found")
         return DepositAdress{}, err
     }
 
@@ -124,4 +157,23 @@ func BinanceDepositAdress(coin string) (DepositAdress, error){
     }
 
     return adress, nil
+}
+
+func BinanceRepayMarginLoan(asset string, amount float64) {
+    // Initialize the Binance client with your API key and secret
+    client := binance.NewClient(binanceAPIKey, binanceAPIKey)
+
+    // Execute the transfer from Spot to Margin
+    response, err := client.NewMarginRepayService().
+            Asset(asset).
+            Amount(strconv.FormatFloat(amount, 'f', -1, 64)).
+            IsIsolated(false).
+            Do(context.Background())
+    
+    if err != nil {
+        log.Fatalf("Failed to repay margin loan: %v", err)
+    }
+
+    // Output the result of the transfer
+    fmt.Printf("Repayment successful! Transaction ID: %d\n", response.TranID)
 }

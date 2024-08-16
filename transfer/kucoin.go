@@ -27,7 +27,8 @@ const (
 func KucoinGetDepositAddress(currency string) (DepositAdress, error) {
 	// Create the request
 	endpoint := "/api/v1/deposit-addresses"
-	url := baseURL + endpoint
+	
+	url := fmt.Sprintf("%s%s?currency=%s", baseURL, endpoint, currency)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return DepositAdress{}, err
@@ -84,7 +85,15 @@ func kucoinCreateDepositAdress(currency string) (DepositAdress, error){
 	// Create the request
 	endpoint := "/api/v1/deposit-addresses"
 	url := baseURL + endpoint
-	req, err := http.NewRequest("POST", url, nil)
+
+	reqBody := map[string]string{
+		"currency": currency,
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return DepositAdress{}, fmt.Errorf("failed to marshal request body: %v", err)
+	}
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return DepositAdress{}, err
 	}
@@ -206,7 +215,7 @@ func kucoinInternalTransfer(currency, from, to string, amount float64) (string, 
 
 func TransferFromKucoinToBinance(currency string, amount float64) (string, error) {
 	// Get the Binance deposit address, tag (memo), and currency
-	binanceAdress, err := BinanceDepositAdress(currency)
+	binanceAdress, err := BinanceDepositAdress(currency, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to get Binance deposit address: %v", err)
 	}
@@ -273,6 +282,67 @@ func TransferFromKucoinToBinance(currency string, amount float64) (string, error
 	data := result["data"].(map[string]interface{})
 	return data["withdrawalId"].(string), nil
 }
+
+func KucoinRepayLoan(currency string, amount float64) (string, error) {
+	// Prepare the request payload
+	repay := map[string]interface{}{
+		"currency": currency,
+		"amount":   strconv.FormatFloat(amount, 'f', -1, 64),
+		"clientOid": uuid.New().String(),
+	}
+
+	payload, err := json.Marshal(repay)
+	if err != nil {
+		return "", err
+	}
+
+	// Create the request
+	endpoint := "/api/v3/margin/repay"
+	url := baseURL + endpoint
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		return "", err
+	}
+
+	// Add headers
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
+	req.Header.Set("KC-API-KEY", apiKey)
+	req.Header.Set("KC-API-SIGN", signature)
+	req.Header.Set("KC-API-TIMESTAMP", timestamp)
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-KEY-VERSION", "3")
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// Read and parse the response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	// Check for errors in the response
+	if resp.StatusCode != http.StatusOK || result["code"] != "200000" {
+		return "", fmt.Errorf("error response: %s", string(body))
+	}
+
+	// Return the repayment ID
+	data := result["data"].(map[string]interface{})
+	return data["orderNo"].(string), nil
+}
+
 
 func signRequest(secret, timestamp, method, endpoint, body string) string {
 	// Prepare the prehash string
