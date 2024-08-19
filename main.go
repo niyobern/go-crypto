@@ -44,13 +44,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		okx(ctx, tickers)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		go testKucoin(ctx, tickers)
+		go Kucoin(ctx, tickers)
 	}()
 
 	wg.Add(1)
@@ -60,20 +54,23 @@ func main() {
 			for {
 				select {
 				case <-ticker.C:
-					otherCoin, err := balance.Binance()
+					// For Binance, transfer all received coins to margin account and repay the margin loan
+					coins, err := balance.Binance()
 					if err != nil {
 						log.Fatalf("Error fetching Binance account info: %v", err)
 					}
-					for _, coin := range otherCoin {
-						if coin.Currency != "USDT" {
+					for _, coin := range coins {
+						if coin.Currency != "USDT" && coin.Wallet == "FUNDING" {
 							// pay the coin to the margin loan
+							transfer.BinanceFunding2Spot(coin.Currency, coin.Balance)
+							time.Sleep(10 * time.Second)
 							transfer.BinanceSpot2Margin(coin.Currency, coin.Balance)
-							time.Sleep(20 * time.Second)
+							time.Sleep(10 * time.Second)
 							transfer.BinanceRepayMarginLoan(coin.Currency, coin.Balance)
 						}
 					}
 					transfer.BinanceMargin2Spot("USDT", CAPITAL)
-					transfer.KucoinMargin2sppt("USDT", CAPITAL)
+					transfer.KucoinMargin2spot("USDT", CAPITAL)
 				case <-ctx.Done():
 					return
 				}
