@@ -1,7 +1,6 @@
 package transfer
 
 import (
-	"context"
 	"errors"
 	"sort"
     "bytes"
@@ -17,7 +16,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
-	"github.com/adshao/go-binance/v2"
 )
 
 

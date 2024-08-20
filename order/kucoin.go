@@ -27,23 +27,22 @@ const (
 func Kucoin(orderType string, symbol string, amount float64) {
 	if orderType == "SPOT" {
 		side := "buy" // Only buying is allowed for spot orders
-		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
+		funds := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
 
 		// Create the spot order
-		orderID, err := createSpotOrder(symbol, side, size)
+		orderID, err := createSpotOrder(symbol, side, funds)
 		if err != nil {
 			fmt.Printf("Error creating spot order: %v\n", err)
 		} else {
 			fmt.Printf("Spot order created successfully with ID: %s\n", orderID)
 		}
 	} else if orderType == "MARGIN" {
-		// Define the order parameters for margin selling
 		side := "sell"                   // Selling only
-		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to sell
+		funds := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to sell
 		autoBorrow := true  // Enable auto-borrowing for leverage
 
 		// Create the margin order
-		orderID, err := createMarginOrder(symbol, side, size, autoBorrow)
+		orderID, err := createMarginOrder(symbol, side, funds, autoBorrow)
 		if err != nil {
 			fmt.Printf("Error creating margin order: %v\n", err)
 		} else {
@@ -52,14 +51,14 @@ func Kucoin(orderType string, symbol string, amount float64) {
 	}
 }
 
-func createSpotOrder(symbol, side, size string) (string, error) {
+func createSpotOrder(symbol, side, funds string) (string, error) {
 	// Prepare the request payload for spot order
 	order := map[string]interface{}{
 		"clientOid": uuid.New().String(),
 		"symbol":    symbol,
 		"side":      side,
 		"type":      "market", // Market order type
-		"size":      size,
+		"funds":      funds,
 	}
 
 	payload, err := json.Marshal(order)
@@ -116,14 +115,14 @@ func createSpotOrder(symbol, side, size string) (string, error) {
 	return data["orderId"].(string), nil
 }
 
-func createMarginOrder(symbol, side, size string, autoBorrow bool) (string, error) {
+func createMarginOrder(symbol, side, funds string, autoBorrow bool) (string, error) {
 	// Prepare the request payload for margin order
 	order := map[string]interface{}{
 		"clientOid":     uuid.New().String(),
 		"symbol":        symbol,
 		"side":          side,
 		"type":          "market",
-		"size":          size,
+		"funds":          funds,
 		"marginModel":   "cross",
 		"autoBorrow":    autoBorrow,
 		"tradeType":     "MARGIN_TRADE",

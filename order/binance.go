@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 	"fmt"
-	"github.com/adshao/go-binance/v2"
 	"arbitrage/utils"
+	"github.com/adshao/go-binance/v2"
 )
 
 func Binance(orders chan Order, marketType string, quantity float64, instId string) {
@@ -23,9 +23,9 @@ func Binance(orders chan Order, marketType string, quantity float64, instId stri
     var order *binance.CreateOrderResponse
 	var err error
     if marketType == "SPOT" {
-		order, err = client.NewCreateOrderService().Symbol(symbol).Side(side).Type(orderType).Quantity(fmt.Sprintf("%f", quantity)).Do(context.Background())
+		order, err = client.NewCreateOrderService().Symbol(symbol).Side(side).Type(orderType).QuoteOrderQty(fmt.Sprintf("%f", quantity)).Do(context.Background())
 	} else if marketType == "MARGIN" {
-		order, err = client.NewCreateMarginOrderService().Symbol(symbol).Side(binance.SideTypeSell).Type(orderType).Quantity(fmt.Sprintf("%f", quantity)).Do(context.Background())
+		order, err = client.NewCreateMarginOrderService().Symbol(symbol).Side(binance.SideTypeSell).Type(orderType).QuoteOrderQty(fmt.Sprintf("%f", quantity)).Do(context.Background())
 	} else {
 		return
 	}

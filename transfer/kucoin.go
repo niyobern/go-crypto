@@ -161,6 +161,10 @@ func KucoinMargin2spot(currency string, amount float64) (string, error){
 	return kucoinInternalTransfer(currency, "margin", "trade", amount)
 }
 
+func KucoinFunding2spot(currency string, amount float64) (string, error){
+	return kucoinInternalTransfer(currency, "main", "trade", amount)
+}
+
 func kucoinInternalTransfer(currency, from, to string, amount float64) (string, error) {
 	// Prepare the request payload
 	transfer := map[string]interface{}{

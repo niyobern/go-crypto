@@ -1,9 +1,7 @@
 package main
 
 import (
-	"arbitrage/balance"
 	"arbitrage/order"
-	"arbitrage/transfer"
 	"arbitrage/utils"
 	"context"
 	"fmt"
@@ -11,8 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
-	"time"
 )
 
 type TickerGeneral struct {
@@ -45,37 +43,6 @@ func main() {
 	go func() {
 		defer wg.Done()
 		go Kucoin(ctx, tickers)
-	}()
-
-	wg.Add(1)
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		go func() {
-			for {
-				select {
-				case <-ticker.C:
-					// For Binance, transfer all received coins to margin account and repay the margin loan
-					coins, err := balance.Binance()
-					if err != nil {
-						log.Fatalf("Error fetching Binance account info: %v", err)
-					}
-					for _, coin := range coins {
-						if coin.Currency != "USDT" && coin.Wallet == "FUNDING" {
-							// pay the coin to the margin loan
-							transfer.BinanceFunding2Spot(coin.Currency, coin.Balance)
-							time.Sleep(10 * time.Second)
-							transfer.BinanceSpot2Margin(coin.Currency, coin.Balance)
-							time.Sleep(10 * time.Second)
-							transfer.BinanceRepayMarginLoan(coin.Currency, coin.Balance)
-						}
-					}
-					transfer.BinanceMargin2Spot("USDT", CAPITAL)
-					transfer.KucoinMargin2spot("USDT", CAPITAL)
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
 	}()
 
 	wg.Add(1)
@@ -153,25 +120,34 @@ func checkArbitrage(instId string, priceInfos map[string]PriceInfo, orders chan 
         fees := 0.0015 // Assume 0.1% fees for each trade
 		coeficient := CAPITAL / (minPrice.Price + (fees * minPrice.Price))
 		sellValue := coeficient * (maxPrice.Price - (fees * maxPrice.Price))
-		final := sellValue - 2
-		if final > 1002 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN"  {
-			makeOrders(orders, instId, "BINAooooNCE", "KUoooCOIN", coeficient*1.25)
+		final := sellValue - 2 // Considered transfer fees to be $2
+		if final > CAPITAL + 2 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN"  {
+			makeOrders(orders, instId, "BINANCE", "KUCOIN", CAPITAL*1.25)
+			log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for 1000 USDT, get %.2f\n",
+			instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, final)
+		}
+		if final > CAPITAL + 2 && minPrice.Market == "KUCOIN" && maxPrice.Market == "BINANCE"  {
+			makeOrders(orders, instId, "BINANCE", "KUCOIN", CAPITAL*1.25)
 			log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for 1000 USDT, get %.2f\n",
 			instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, final)
 		}
 	}
 }
 
-func makeOrders(orders chan order.Order, instId string, buyMarket string, sellMarket string, sellAmount float64){
+func makeOrders(orders chan order.Order, instId string, buyMarket string, sellMarket string, sellValue float64){
+	base := strings.Split(instId, "-")[0]
 	switch buyMarket {
 		case "BINANCE":
 			go order.Binance(orders, "SPOT", CAPITAL, instId)
+			go utils.PostBinanceBuy(base, CAPITAL)
+
 		case "KUCOIN":
-			go order.Kucoin("MARGIN", instId, sellAmount)
+			go order.Kucoin("MARGIN", instId, sellValue)
+			go utils.PostKucoinBuy(base, CAPITAL)
 	}
 	switch sellMarket {
 		case "BINANCE":
-			go order.Binance(orders, "MARGIN", sellAmount, instId)
+			go order.Binance(orders, "MARGIN", sellValue, instId)
 		case "KUCOIN":
 			go order.Kucoin("SPOT", instId, CAPITAL)
 	}
