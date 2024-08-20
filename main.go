@@ -2,6 +2,7 @@ package main
 
 import (
 	"arbitrage/order"
+	"arbitrage/transfer"
 	"arbitrage/utils"
 	"context"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type TickerGeneral struct {
@@ -24,7 +26,7 @@ type PriceInfo struct {
 	Market string
 }
 
-const CAPITAL = 1000.0
+const CAPITAL = 60
 
 func main() {
 	tickers := make(chan TickerGeneral)
@@ -147,8 +149,12 @@ func makeOrders(orders chan order.Order, instId string, buyMarket string, sellMa
 	}
 	switch sellMarket {
 		case "BINANCE":
+			transfer.BinanceSpot2Margin("USDT", CAPITAL)
+			time.Sleep(50*time.Millisecond)
 			go order.Binance(orders, "MARGIN", sellValue, instId)
 		case "KUCOIN":
+			transfer.KucoinSpot2Margin(base, CAPITAL)
+			time.Sleep(50*time.Millisecond)
 			go order.Kucoin("SPOT", instId, CAPITAL)
 	}
 }
