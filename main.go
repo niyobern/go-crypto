@@ -5,14 +5,16 @@ import (
 	"arbitrage/transfer"
 	"arbitrage/utils"
 	"context"
-	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type TickerGeneral struct {
@@ -26,11 +28,10 @@ type PriceInfo struct {
 	Market string
 }
 
-const CAPITAL = 60
+const CAPITAL = 60.0
 
 func main() {
 	tickers := make(chan TickerGeneral)
-	orders := make(chan order.Order)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
@@ -40,6 +41,12 @@ func main() {
         log.Fatal("Failed to open LevelDB:", err)
     }
     defer db.Close()
+
+	orders, isOpen, err := utils.FindOpenOrders(db)
+
+	if err != nil {
+		log.Fatal("Failed to get orders:", err)
+	}
 
 	wg.Add(1)
 	go func() {
@@ -83,15 +90,10 @@ func main() {
 
 			// Check for arbitrage opportunities
 			if len(prices[ticker.InstId]) > 1 {
-				checkArbitrage(ticker.InstId, prices[ticker.InstId], orders)
+				go CheckifOrderOpen(db, orders, &isOpen, ticker.InstId, prices[ticker.InstId])
+				checkArbitrage(&isOpen, db, &orders, ticker.InstId, prices[ticker.InstId])
 			}
 			mu.Unlock()
-		}
-	}()
-
-	go func (){
-		for order := range orders {
-			fmt.Println(order)
 		}
 	}()
 
@@ -100,7 +102,62 @@ func main() {
 	log.Println("shutting down")
 }
 
-func checkArbitrage(instId string, priceInfos map[string]PriceInfo, orders chan order.Order) {
+func CheckifOrderOpen(db *leveldb.DB, orders utils.OrderData, isOpen *bool, instId string, priceInfos map[string]PriceInfo) {
+	var binance, kucoin PriceInfo
+	base := strings.Split(instId, "-")[0]
+	for _, priceInfo := range priceInfos {
+		
+		if priceInfo.Market == "BINANCE" {
+			binance = priceInfo
+		}
+		if priceInfo.Market == "KUCOIN" {
+			kucoin = priceInfo
+		}
+
+		if orders.BuyMarket  == "BINANCE" {
+			if binance.Price >= kucoin.Price {
+				go order.BinanceReverse("SPOT", orders.Amount, instId)
+				go order.KucoinReverse("MARGIN", instId, orders.Amount)
+				time.Sleep(1 * time.Second)
+				transfer.KucoinRepayLoan("USDT", CAPITAL)
+				time.Sleep(1 * time.Second)
+				transfer.KucoinMargin2spot("USDT", CAPITAL)
+				err := utils.SaveBuyrders(db, "", "", 0, 0)
+				if err != nil {
+					log.Fatal(err)
+				}
+				err = utils.SaveSellOrders(db, "", 0)
+				if err == nil {
+					*isOpen = false
+				} else {
+					log.Fatal(err)
+				}
+				
+			}
+		} else {
+			if kucoin.Price >= binance.Price {
+                go order.KucoinReverse("SPOT", instId, orders.Amount)
+				go order.BinanceReverse("MARGIN", orders.Amount, instId)
+				time.Sleep(1 * time.Second)
+				transfer.BinanceRepayMarginLoan(base, CAPITAL)
+				time.Sleep(1 * time.Second)
+				transfer.BinanceMargin2Spot("USDT", CAPITAL)
+				err := utils.SaveBuyrders(db, "", "", 0, 0)
+				if err != nil {
+					log.Fatal(err)
+				}
+				err = utils.SaveSellOrders(db, "", 0)
+				if err == nil {
+					*isOpen = false
+				} else {
+					log.Fatal(err)
+				}
+			}
+		}
+	}
+}
+
+func checkArbitrage(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instId string, priceInfos map[string]PriceInfo) {
 	var minPrice, maxPrice PriceInfo
 	first := true
 	for _, priceInfo := range priceInfos {
@@ -119,42 +176,79 @@ func checkArbitrage(instId string, priceInfos map[string]PriceInfo, orders chan 
 	}
 
 	if minPrice.Market != maxPrice.Market {
-        fees := 0.0015 // Assume 0.1% fees for each trade
+        fees := 0.001 // Assume 0.1% fees for each trade
 		coeficient := CAPITAL / (minPrice.Price + (fees * minPrice.Price))
 		sellValue := coeficient * (maxPrice.Price - (fees * maxPrice.Price))
-		final := sellValue - 2 // Considered transfer fees to be $2
-		if final > CAPITAL + 2 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN"  {
-			makeOrders(orders, instId, "BINANCE", "KUCOIN", CAPITAL*1.25)
-			log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for 1000 USDT, get %.2f\n",
-			instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, final)
+		final := sellValue - 0.08 // Considered transfer fees to be $2
+		if final > CAPITAL + 0.1 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN" {
+			// log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for %.2f USDT, get %.2f\n",
+			// instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, CAPITAL, final)
+			makeOrders(isOpen, db, orders, instId, "BINANCE", "KUCOIN", minPrice.Price, maxPrice.Price)
 		}
-		if final > CAPITAL + 2 && minPrice.Market == "KUCOIN" && maxPrice.Market == "BINANCE"  {
-			makeOrders(orders, instId, "BINANCE", "KUCOIN", CAPITAL*1.25)
-			log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for 1000 USDT, get %.2f\n",
-			instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, final)
+		if final > CAPITAL + 0.1 && minPrice.Market == "KUCOIN" && maxPrice.Market == "BINANCE"  {
+			// log.Printf("Arbitrage for %s: Buy on %s at %.4f, sell on %s at %.4f for %.2f USDT, get %.2f\n",
+			// instId, minPrice.Market, minPrice.Price, maxPrice.Market, maxPrice.Price, CAPITAL, final)
+			makeOrders(isOpen, db, orders, instId, "KUCOIN", "BINANCE", minPrice.Price, maxPrice.Price)
 		}
 	}
 }
 
-func makeOrders(orders chan order.Order, instId string, buyMarket string, sellMarket string, sellValue float64){
+func makeOrders(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instId string, buyMarket string, sellMarket string, minPrice, maxPrice float64){
+	if *isOpen {
+		return
+	}
+	buyAmount := math.Floor(CAPITAL/minPrice)
+	if buyAmount < CAPITAL {
+		return
+	}
 	base := strings.Split(instId, "-")[0]
 	switch buyMarket {
 		case "BINANCE":
-			go order.Binance(orders, "SPOT", CAPITAL, instId)
-			go utils.PostBinanceBuy(base, CAPITAL)
+			go func(){
+				order.Binance("SPOT", buyAmount, instId)
+				utils.SaveBuyrders(db, "BINANCE", base, minPrice, buyAmount)
+				orders.Amount = buyAmount
+				orders.BuyMarket = "BINANCE"
+				orders.Coin = base
+				*isOpen = true
+			}()
 
 		case "KUCOIN":
-			go order.Kucoin("MARGIN", instId, sellValue)
-			go utils.PostKucoinBuy(base, CAPITAL)
+			go func(){
+				order.Kucoin("SPOT", instId, buyAmount)
+				utils.SaveBuyrders(db, "KUCOIN", base, minPrice, buyAmount)
+				orders.Amount = buyAmount
+				orders.BuyMarket = "KUCOIN"
+				orders.Coin = base
+				*isOpen = true
+			}()
 	}
 	switch sellMarket {
 		case "BINANCE":
-			transfer.BinanceSpot2Margin("USDT", CAPITAL)
-			time.Sleep(50*time.Millisecond)
-			go order.Binance(orders, "MARGIN", sellValue, instId)
+			go func(){
+				_, err := transfer.BinanceSpot2Margin("USDT", CAPITAL)
+				if err != nil {
+					transfer.BinanceMargin2Spot("USDT", CAPITAL)
+					log.Println("BiS2M error", err)
+					return
+				}
+				order.Binance("MARGIN", buyAmount, instId)
+				utils.SaveSellOrders(db, "BINANCE", maxPrice)
+				orders.SellMarket = "BINANCE"
+				orders.SellPrice = maxPrice
+			}()
 		case "KUCOIN":
-			transfer.KucoinSpot2Margin(base, CAPITAL)
-			time.Sleep(50*time.Millisecond)
-			go order.Kucoin("SPOT", instId, CAPITAL)
+			go func(){
+				_, err := transfer.KucoinSpot2Margin("USDT", CAPITAL)
+				if err != nil {
+					transfer.KucoinMargin2spot("USDT", CAPITAL)
+					log.Println("KuS2M error", err)
+					return
+				}
+				order.Kucoin("MARGIN", instId, buyAmount)
+				utils.SaveSellOrders(db, "KUCOIN", maxPrice)
+				orders.SellMarket = "KUCOIN"
+				orders.SellPrice = maxPrice
+			}()
 	}
 }

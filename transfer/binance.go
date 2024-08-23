@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
     "io"
+	"math"
     "encoding/json"
 	"net/url"
 	"crypto/hmac"
@@ -19,15 +20,15 @@ import (
 )
 
 
-func BinanceSpot2Margin(asset string, amount float64) (*TransferResponse, error){
+func BinanceSpot2Margin(asset string, amount float64) (string, error){
     return binanceInternal(asset, "MAIN_MARGIN", amount)
 }
 
-func BinanceMargin2Spot(asset string, amount float64) (*TransferResponse, error){
+func BinanceMargin2Spot(asset string, amount float64) (string, error){
     return binanceInternal(asset, "MARGIN_MAIN", amount)
 }
 
-func BinanceFunding2Spot(asset string, amount float64) (*TransferResponse, error){
+func BinanceFunding2Spot(asset string, amount float64) (string, error){
 	return binanceInternal(asset, "FUNDING_MAIN", amount)
 }
 
@@ -41,7 +42,7 @@ type TransferResponse struct {
 	TranID int64 `json:"tranId"`
 }
 // TransferFunds handles transferring funds from margin account to spot account
-func binanceInternal(asset, transferType string, amount float64) (*TransferResponse, error) {
+func binanceInternal(asset, transferType string, amount float64) (string, error) {
 	endpoint := "https://api.binance.com/sapi/v1/asset/transfer"
 
 	// Set parameters
@@ -59,7 +60,7 @@ func binanceInternal(asset, transferType string, amount float64) (*TransferRespo
 	// Create the request
 	req, err := http.NewRequest("POST", endpoint, bytes.NewBufferString(params.Encode()))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// Set headers
@@ -70,39 +71,58 @@ func binanceInternal(asset, transferType string, amount float64) (*TransferRespo
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed: %s", string(body))
+		return "", fmt.Errorf("API request failed: %s", string(body))
 	}
 
 	// Parse the response
 	var transferResponse TransferResponse
 	if err := json.Unmarshal(body, &transferResponse); err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &transferResponse, nil
+	return strconv.FormatInt(transferResponse.TranID, 10), nil
+}
+
+func wround(stamount string, multiple float64) string {
+	log.Println(multiple)
+	amount, _ := strconv.ParseFloat(stamount, 64)
+	roun := math.Floor(math.Floor(amount/multiple) * multiple)
+	log.Println(roun)
+	return strconv.FormatFloat(roun, 'f', -1, 64)
 }
 
 func withdrawFunds(asset, amount, address, memo, network string) (string, error) {
 	endpoint := "https://api.binance.com/sapi/v1/capital/withdraw/apply"
+
+	coins, _ := getAllCoins()
+	var multiple float64
+
+	for _, coin := range coins {
+		for _, chain := range coin.NetworkList {
+			if chain.Network == network {
+				multiple, _ = strconv.ParseFloat(chain.WithdrawIntegerMultiple, 64)
+			}
+		}
+	}
 
 	// Set parameters
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	params := url.Values{}
 	params.Set("coin", asset)
 	params.Set("address", address)
-	params.Set("amount", amount)
+	params.Set("amount", wround(amount, multiple))
 	params.Set("network", network)
 	params.Set("timestamp", timestamp)
 
@@ -327,7 +347,6 @@ type DepositAddressResponse struct {
 }
 
 func BinanceDepositAdress(coin, failedNetwork string) (DepositAdress, error){
-    // client := binance.NewClient(binanceAPIKey, binanceAPIKey)
 
     coins, err := getAllCoins()
     if err != nil {
@@ -397,24 +416,6 @@ func BinanceDepositAdress(coin, failedNetwork string) (DepositAdress, error){
     return adress, nil
 }
 
-// func BinanceRepayMarginLoan(asset string, amount float64) {
-//     // Initialize the Binance client with your API key and secret
-//     client := binance.NewClient(binanceAPIKey, binanceAPIKey)
-
-//     // Execute the transfer from Spot to Margin
-//     response, err := client.NewMarginRepayService().
-//             Asset(asset).
-//             Amount(strconv.FormatFloat(amount, 'f', -1, 64)).
-//             IsIsolated(false).
-//             Do(context.Background())
-    
-//     if err != nil {
-//         log.Fatalf("Failed to repay margin loan: %v", err)
-//     }
-
-//     // Output the result of the transfer
-//     fmt.Printf("Repayment successful! Transaction ID: %d\n", response.TranID)
-// }
 
 func BinanceRepayMarginLoan(asset string, amount float64) (string, error) {
 	endpoint := "https://api.binance.com/sapi/v1/margin/borrow-repay"

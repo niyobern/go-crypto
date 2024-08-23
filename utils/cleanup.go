@@ -8,14 +8,14 @@ import (
 )
 
 func PostBinanceBuy(base string, capital float64){
-	time.Sleep(20 * time.Second)
+	time.Sleep(2 * time.Second)
 	bal, err := balance.Binance()
 	if err != nil {
-		log.Println("Returning Binance Balances, failed")
+		log.Println("Binance Balances, failed", err)
 		return
 	}
 	for _, coin := range bal {
-		if coin.Wallet == "FUNDING" && coin.Currency == base {
+		if coin.Wallet == "SPOT" && coin.Currency == base {
 			_, err := transfer.Binance2Kucoin(coin.Currency, coin.Balance)
 			if err != nil {
 				log.Println("Transfer B2K failed", err)
@@ -99,6 +99,7 @@ func PostBinanceBuy(base string, capital float64){
 									log.Println("Transfer failed BF2S", err)
 									continue
 								}
+								log.Println("Bought from Binance")
 								return
 							}
 						}
@@ -111,14 +112,14 @@ func PostBinanceBuy(base string, capital float64){
 
 
 func PostKucoinBuy(base string, capital float64){
-	time.Sleep(20 * time.Second)
+	time.Sleep(5 * time.Second)
 	bal, err := balance.Kucoin()
 	if err != nil {
 		log.Println("Returning Binance Balances, failed")
 		return
 	}
 	for _, coin := range bal {
-		if coin.Wallet == "FUNDING" && coin.Currency == base {
+		if coin.Wallet == "SPOT" && coin.Currency == base {
 			_, err := transfer.TransferFromKucoinToBinance(coin.Currency, coin.Balance)
 			if err != nil {
 				log.Println("Transfer K2B failed", err)
@@ -174,7 +175,7 @@ func PostKucoinBuy(base string, capital float64){
 				if stuckAt <= 4 {
 					_, err := transfer.Binance2Kucoin("USDT", capital)
 					if err != nil {
-						log.Println("Transfer failed B2C", err)
+						log.Println("Transfer failed B2K", err)
 						stuckAt = 4
 						continue
 					}
@@ -202,6 +203,7 @@ func PostKucoinBuy(base string, capital float64){
 									log.Println("Transfer failed KF2S", err)
 									continue
 								}
+								log.Println("Bought from Kucoin")
 								return
 							}
 						}

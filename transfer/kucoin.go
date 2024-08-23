@@ -72,9 +72,10 @@ func KucoinGetDepositAddress(currency string) (DepositAdress, error) {
 	if !ok {
 		return DepositAdress{}, nil
 	}
-	if data == nil {
+	if len(data) == 0 {
 		return kucoinCreateDepositAdress(currency)
 	}
+
 	// Extract the deposit address
 	adress := DepositAdress{
 		Adress: data[0].(map[string]interface{})["address"].(string),
@@ -302,10 +303,11 @@ func TransferFromKucoinToBinance(currency string, amount float64) (string, error
 }
 
 func KucoinRepayLoan(currency string, amount float64) (string, error) {
+	log.Println(amount)
 	// Prepare the request payload
 	repay := map[string]interface{}{
 		"currency": currency,
-		"amount":   strconv.FormatFloat(amount, 'f', -1, 64),
+		"size":   strconv.FormatFloat(amount, 'f', -1, 64),
 		"clientOid": uuid.New().String(),
 	}
 

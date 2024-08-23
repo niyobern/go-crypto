@@ -57,7 +57,7 @@ func binance(ctx context.Context, tickers chan TickerGeneral) {
 					tickers <- TickerGeneral{
 						Price:  ticker.Price,
 						InstId: symbol,
-						Market: "binance",
+						Market: "BINANCE",
 					}
 				}
 			}
