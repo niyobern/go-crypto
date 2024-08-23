@@ -6,6 +6,7 @@ import (
 	"arbitrage/utils"
 	"context"
 	"log"
+	"math"
 	"os"
 	"os/signal"
 	"strconv"
@@ -196,7 +197,10 @@ func makeOrders(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instId st
 	if *isOpen {
 		return
 	}
-	buyAmount := CAPITAL/maxPrice
+	buyAmount := math.Floor(CAPITAL/minPrice)
+	if buyAmount < CAPITAL {
+		return
+	}
 	base := strings.Split(instId, "-")[0]
 	switch buyMarket {
 		case "BINANCE":

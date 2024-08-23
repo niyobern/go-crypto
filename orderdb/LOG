@@ -2813,3 +2813,13 @@
 13:55:05.978734 version@stat F·[1 1] S·1KiB[1KiB 250B] Sc·[0.25 0.00]
 13:55:05.994500 db@janitor F·4 G·0
 13:55:05.994584 db@open done T·26.248099ms
+=============== Aug 23, 2024 (CAT) ===============
+14:02:03.238479 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+14:02:03.239454 version@stat F·[1 1] S·1KiB[1KiB 250B] Sc·[0.25 0.00]
+14:02:03.239487 db@open opening
+14:02:03.239594 journal@recovery F·1
+14:02:03.240296 journal@recovery recovering @530
+14:02:03.249121 memdb@flush created L0@532 N·24 S·352B "amount,v262":"sel..ket,v263"
+14:02:03.249483 version@stat F·[2 1] S·1KiB[1KiB 250B] Sc·[0.50 0.00]
+14:02:03.265007 db@janitor F·5 G·0
+14:02:03.265131 db@open done T·25.618312ms
