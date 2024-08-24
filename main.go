@@ -241,15 +241,15 @@ func checkArbitrage(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instI
 		sellValue := coeficient * (maxPrice.Price - (fees * maxPrice.Price))
 		final := sellValue - 0.08 // Considered transfer fees to be $2
 		if final > CAPITAL+0.1 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN" {
-			makeOrders(isOpen, db, orders, instId, "BINANCE", "KUCOIN", minPrice.Price, maxPrice.Price)
+			makeOrders(isOpen, db, orders, instId, "BINANCE", minPrice.Price, maxPrice.Price)
 		}
 		if final > CAPITAL+0.1 && minPrice.Market == "KUCOIN" && maxPrice.Market == "BINANCE" {
-			makeOrders(isOpen, db, orders, instId, "KUCOIN", "BINANCE", minPrice.Price, maxPrice.Price)
+			makeOrders(isOpen, db, orders, instId, "KUCOIN", minPrice.Price, maxPrice.Price)
 		}
 	}
 }
 
-func makeOrders(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instId string, buyMarket string, sellMarket string, minPrice, maxPrice float64) {
+func makeOrders(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instId string, buyMarket string minPrice, maxPrice float64) {
 	if *isOpen {
 		time.Sleep(100 * time.Millisecond)
 		return
