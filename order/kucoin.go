@@ -24,44 +24,44 @@ const (
 	baseURL       = "https://api.kucoin.com"
 )
 
-func Kucoin(orderType string, symbol string, amount float64) {
+func Kucoin(orderType string, symbol string, amount float64) error {
 	if orderType == "SPOT" {
 		side := "buy" // Only buying is allowed for spot orders
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
 
 		// Create the spot order
-		orderID, err := createSpotOrder(symbol, side, size)
+		_, err := createSpotOrder(symbol, side, size)
 		if err != nil {
-			fmt.Printf("Kucoin spot error: %v\n", err)
+			return err
 		} else {
-			fmt.Printf("Spot order created successfully with ID: %s\n", orderID)
+			return nil
 		}
 	} else if orderType == "MARGIN" {
 		side := "sell"                   // Selling only
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to sell
 		autoBorrow := true  // Enable auto-borrowing for leverage
 
-		// Create the margin order
-		orderID, err := createMarginOrder(symbol, side, size, autoBorrow)
+		_, err := createMarginOrder(symbol, side, size, autoBorrow)
 		if err != nil {
-			log.Printf("Kucoin order error: %v\n", err)
+			return err
 		} else {
-			fmt.Printf("Margin order created successfully with ID: %s\n", orderID)
+			return nil
 		}
 	}
+	return nil
 }
 
-func KucoinReverse(orderType string, symbol string, amount float64) {
+func KucoinReverse(orderType string, symbol string, amount float64) error {
 	if orderType == "SPOT" {
 		side := "sell" // Only buying is allowed for spot orders
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
 
 		// Create the spot order
-		orderID, err := createSpotOrder(symbol, side, size)
+		_, err := createSpotOrder(symbol, side, size)
 		if err != nil {
-			fmt.Printf("Kucoin spot error: %v\n", err)
+			return err
 		} else {
-			fmt.Printf("Spot order created successfully with ID: %s\n", orderID)
+			return nil
 		}
 	} else if orderType == "MARGIN" {
 		side := "buy"                   // Selling only
@@ -69,13 +69,14 @@ func KucoinReverse(orderType string, symbol string, amount float64) {
 		autoBorrow := true  // Enable auto-borrowing for leverage
 
 		// Create the margin order
-		orderID, err := createMarginOrder(symbol, side, size, autoBorrow)
+		_, err := createMarginOrder(symbol, side, size, autoBorrow)
 		if err != nil {
-			log.Printf("Kucoin order error: %v\n", err)
+			return err
 		} else {
-			fmt.Printf("Margin order created successfully with ID: %s\n", orderID)
+			return nil
 		}
 	}
+	return nil
 }
 
 func createSpotOrder(symbol, side, size string) (string, error) {

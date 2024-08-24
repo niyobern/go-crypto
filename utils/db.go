@@ -31,7 +31,7 @@ func Database(dbPath string) (*leveldb.DB, error){
 	return db, nil
 }
 
-func SaveBuyrders(db *leveldb.DB, buyMarket, coin string, buyPrice, amount float64) error{
+func SaveOrders(db *leveldb.DB, buyMarket, sellMarket, coin string, amount, buyPrice, sellPrice float64) error{
 	// Save data to the database
 	err := db.Put([]byte("buyMarket"), []byte(buyMarket), nil)
 	if err != nil {
@@ -53,12 +53,7 @@ func SaveBuyrders(db *leveldb.DB, buyMarket, coin string, buyPrice, amount float
 		return err
 	}
 
-	return nil
-}
-
-func SaveSellOrders(db *leveldb.DB, sellMarket string, sellPrice float64) error{
-	// Save data to the database
-	err := db.Put([]byte("sellMarket"), []byte(sellMarket), nil)
+	err = db.Put([]byte("sellMarket"), []byte(sellMarket), nil)
 	if err != nil {
 		return err
 	}
@@ -67,8 +62,10 @@ func SaveSellOrders(db *leveldb.DB, sellMarket string, sellPrice float64) error{
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
+
 
 func FindOpenOrders(db *leveldb.DB) (OrderData, bool, error){
 
@@ -119,7 +116,7 @@ func FindOpenOrders(db *leveldb.DB) (OrderData, bool, error){
     }
 	bmin := string(res)
 	if bmin == "" {
-		return OrderData{}, false, nil
+		return OrderData{}, true, nil
 	}
 
 	output.BuyMarket = bmin
