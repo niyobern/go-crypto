@@ -219,6 +219,72 @@ type CoinInfo struct {
 	Withdrawing       string        `json:"withdrawing"`
 }
 
+type MarginCoin struct {
+	Base          string `json:"base"`
+	ID            int64  `json:"id"`
+	IsBuyAllowed  bool   `json:"isBuyAllowed"`
+	IsMarginTrade bool   `json:"isMarginTrade"`
+	IsSellAllowed bool   `json:"isSellAllowed"`
+	Quote         string `json:"quote"`
+	Symbol        string `json:"symbol"`
+}
+
+func GetAllMarginAllowed() ([]string, error) {
+	endpoint := "https://api.binance.com/sapi/v1/margin/allPairs"
+
+	// Set parameters
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	params := url.Values{}
+	params.Set("timestamp", timestamp)
+
+	// Generate signature
+	signature := GenerateSignature(params.Encode(), binanceAPISecret)
+	params.Set("signature", signature)
+
+	// Create the request
+	req, err := http.NewRequest("GET", endpoint+"?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	req.Header.Set("X-MBX-APIKEY", binanceAPIKey)
+
+	// Make the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle errors from Binance API
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request failed: %s", string(body))
+	}
+
+	// Parse the response
+	var coins []MarginCoin
+	if err := json.Unmarshal(body, &coins); err != nil {
+		return nil, err
+	}
+
+	var allowed []string
+	for _, i := range coins {
+		if i.IsBuyAllowed && i.IsMarginTrade && i.IsSellAllowed && i.Quote == "USDT"{
+			allowed = append(allowed, i.Base)
+		}
+	}
+
+	return allowed, nil
+}
+
 // getAllCoins fetches all coins available for deposit and withdrawal
 func getAllCoins() ([]CoinInfo, error) {
 	endpoint := "https://api.binance.com/sapi/v1/capital/config/getall"

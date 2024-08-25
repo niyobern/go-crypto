@@ -36,6 +36,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
     
+	res, err := transfer.GetAllMarginAllowed()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Fatalln(res)
 	db, err := utils.Database("orderdb")
 	if err != nil {
 		log.Fatal("Failed to open LevelDB:", err)
@@ -249,7 +254,7 @@ func checkArbitrage(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instI
 	}
 }
 
-func makeOrders(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instId string, buyMarket string minPrice, maxPrice float64) {
+func makeOrders(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instId string, buyMarket string, minPrice, maxPrice float64) {
 	if *isOpen {
 		time.Sleep(100 * time.Millisecond)
 		return
