@@ -21,14 +21,16 @@ type TickerGeneral struct {
 	InstId string `json:"instId"`
 	Price  string `json:"price"`
 	Market string `json:"Market"`
+	Size string `json:"size"`
 }
 
 type PriceInfo struct {
 	Price  float64
 	Market string
+	Size   float64
 }
 
-const CAPITAL = 60.0
+const CAPITAL = 2000
 
 func main() {
 	tickers := make(chan TickerGeneral)
@@ -36,11 +38,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
     
-	res, err := transfer.GetAllMarginAllowed()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Fatalln(res)
+	// res, err := transfer.GetAllMarginAllowed()
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+	// log.Fatalln(res)
 	db, err := utils.Database("orderdb")
 	if err != nil {
 		log.Fatal("Failed to open LevelDB:", err)
@@ -85,12 +87,17 @@ func main() {
 				log.Printf("invalid price %s for %s: %v", ticker.Price, ticker.InstId, err)
 				continue
 			}
+			size, err := strconv.ParseFloat(ticker.Size, 64)
+			if err != nil {
+				log.Printf("invalid size %s for %s: %v", ticker.Size, ticker.InstId, err)
+				continue
+			}
 
 			mu.Lock()
 			if _, exists := prices[ticker.InstId]; !exists {
 				prices[ticker.InstId] = make(map[string]PriceInfo)
 			}
-			prices[ticker.InstId][ticker.Market] = PriceInfo{Price: price, Market: ticker.Market}
+			prices[ticker.InstId][ticker.Market] = PriceInfo{Price: price, Market: ticker.Market, Size: size}
 
 			// Check for arbitrage opportunities
 			if len(prices[ticker.InstId]) > 1 {
@@ -243,12 +250,17 @@ func checkArbitrage(isOpen *bool, db *leveldb.DB, orders *utils.OrderData, instI
 	if minPrice.Market != maxPrice.Market {
 		fees := 0.001 // Assume 0.1% fees for each trade
 		coeficient := CAPITAL / (minPrice.Price + (fees * minPrice.Price))
-		sellValue := coeficient * (maxPrice.Price - (fees * maxPrice.Price))
-		final := sellValue - 0.08 // Considered transfer fees to be $2
-		if final > CAPITAL+0.1 && minPrice.Market == "BINANCE" && maxPrice.Market == "KUCOIN" {
-			makeOrders(isOpen, db, orders, instId, "BINANCE", minPrice.Price, maxPrice.Price)
-		}
-		if final > CAPITAL+0.1 && minPrice.Market == "KUCOIN" && maxPrice.Market == "BINANCE" {
+
+		// get the lowest size between ask and bid
+		lowestSize := math.Min(minPrice.Size, maxPrice.Size)
+		amount := math.Min(lowestSize, coeficient)
+		sellValue := amount * (maxPrice.Price - (fees * maxPrice.Price))
+		final := sellValue - 3 // Considered transfer fees to be $2 for coin and $1 for USDT
+		capital := amount * minPrice.Price
+		profit := final - capital
+	
+		if profit > 0 && minPrice.Market == "KUCOIN" && maxPrice.Market == "BINANCE" {
+			// log.Println("KUCOIN to BINANCE", instId, minPrice.Price, maxPrice.Price, capital, profit)
 			makeOrders(isOpen, db, orders, instId, "KUCOIN", minPrice.Price, maxPrice.Price)
 		}
 	}

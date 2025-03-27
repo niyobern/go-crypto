@@ -1,28 +1,29 @@
 package order
 
 import (
-    "log"
-    "os"
+	"log"
+	"os"
 
-    "github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 )
+
 type Order struct {
-    Symbol        string  `json:"symbol"`
-    OrderID       int64   `json:"orderId"`
-    Price         string  `json:"price"`
-    Quantity      string  `json:"quantity"`
-    Type          string  `json:"type"`
-    Status        string  `json:"status"`
-    Side          string  `json:"side"`
-    Time          int64   `json:"time"`
+	Symbol   string `json:"symbol"`
+	OrderID  int64  `json:"orderId"`
+	Price    string `json:"price"`
+	Quantity string `json:"quantity"`
+	Type     string `json:"type"`
+	Status   string `json:"status"`
+	Side     string `json:"side"`
+	Time     int64  `json:"time"`
 }
 
 var (
-	binanceAPIKey       string
-	binanceAPISecret    string
-	kucoinAPIKey        string
-	kucoinAPISecret     string
-	kucoinPassphrase    string
+	binanceAPIKey    string
+	binanceAPISecret string
+	kucoinAPIKey     string
+	kucoinAPISecret  string
+	kucoinPassphrase string
 )
 
 type DepositAdress struct {
@@ -38,14 +39,18 @@ func init() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
+	// Load Binance credentials
 	binanceAPIKey = os.Getenv("BINANCE_API_KEY")
 	binanceAPISecret = os.Getenv("BINANCE_API_SECRET")
+
+	// Load KuCoin credentials
 	kucoinAPIKey = os.Getenv("KUCOIN_API_KEY")
 	kucoinAPISecret = os.Getenv("KUCOIN_API_SECRET")
 	kucoinPassphrase = os.Getenv("KUCOIN_API_PASSPHRASE")
 
 	// Check if any required environment variable is missing
-	if kucoinAPIKey == "" || kucoinAPISecret == "" || kucoinPassphrase == "" || binanceAPIKey == "" || binanceAPISecret == "" {
+	if kucoinAPIKey == "" || kucoinAPISecret == "" || kucoinPassphrase == "" ||
+		binanceAPIKey == "" || binanceAPISecret == "" {
 		log.Fatal("Missing required API keys or secrets in environment variables")
 	}
 }

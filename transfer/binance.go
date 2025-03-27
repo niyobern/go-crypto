@@ -83,7 +83,7 @@ func binanceInternal(asset, transferType string, amount float64) (string, error)
 
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API request failed: %s", string(body))
+		return "", fmt.Errorf("binance transfer API request failed: %s", string(body))
 	}
 
 	// Parse the response
@@ -161,7 +161,7 @@ func withdrawFunds(asset, amount, address, memo, network string) (string, error)
 
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API request failed: %s", string(body))
+		return "", fmt.Errorf("binance withdraw API request failed: %s", string(body))
 	}
 
 	// Parse the response
@@ -266,7 +266,7 @@ func GetAllMarginAllowed() ([]string, error) {
 
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed: %s", string(body))
+		return nil, fmt.Errorf("binance margin API request failed: %s", string(body))
 	}
 
 	// Parse the response
@@ -323,7 +323,7 @@ func getAllCoins() ([]CoinInfo, error) {
 
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed: %s", string(body))
+		return nil, fmt.Errorf("binance capital config API request failed: %s", string(body))
 	}
 
 	// Parse the response
@@ -393,7 +393,7 @@ func getDepositAddress(coin, network string) (*DepositAddressResponse, error) {
 
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed: %s", string(body))
+		return nil, fmt.Errorf("binance capital deposit address API request failed: %s", string(body))
 	}
 
 	// Parse the response
@@ -524,7 +524,7 @@ func BinanceRepayMarginLoan(asset string, amount float64) (string, error) {
 
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API request failed: %s", string(body))
+		return "", fmt.Errorf("binance repay margin loan API request failed: %s", string(body))
 	}
 
 	// Parse the response

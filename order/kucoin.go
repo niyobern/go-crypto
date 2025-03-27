@@ -16,17 +16,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// KuCoin API credentials
-const (
-	apiKey        = "66aaab422dc99c0001efe888"
-	apiSecret     = "98fe74d7-6915-43b7-b95a-4346ab99ad80"
-	apiPassphrase = "Reform@781"
-	baseURL       = "https://api.kucoin.com"
+// KuCoin API configuration
+var (
+	baseURL = "https://api.kucoin.com"
 )
 
 func Kucoin(orderType string, symbol string, amount float64) error {
 	if orderType == "SPOT" {
-		side := "buy" // Only buying is allowed for spot orders
+		side := "buy"                                    // Only buying is allowed for spot orders
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
 
 		// Create the spot order
@@ -37,9 +34,9 @@ func Kucoin(orderType string, symbol string, amount float64) error {
 			return nil
 		}
 	} else if orderType == "MARGIN" {
-		side := "sell"                   // Selling only
+		side := "sell"                                   // Selling only
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to sell
-		autoBorrow := true  // Enable auto-borrowing for leverage
+		autoBorrow := true                               // Enable auto-borrowing for leverage
 
 		_, err := createMarginOrder(symbol, side, size, autoBorrow)
 		if err != nil {
@@ -53,7 +50,7 @@ func Kucoin(orderType string, symbol string, amount float64) error {
 
 func KucoinReverse(orderType string, symbol string, amount float64) error {
 	if orderType == "SPOT" {
-		side := "sell" // Only buying is allowed for spot orders
+		side := "sell"                                   // Only buying is allowed for spot orders
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
 
 		// Create the spot order
@@ -64,9 +61,9 @@ func KucoinReverse(orderType string, symbol string, amount float64) error {
 			return nil
 		}
 	} else if orderType == "MARGIN" {
-		side := "buy"                   // Selling only
+		side := "buy"                                    // Selling only
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to sell
-		autoBorrow := true  // Enable auto-borrowing for leverage
+		autoBorrow := true                               // Enable auto-borrowing for leverage
 
 		// Create the margin order
 		_, err := createMarginOrder(symbol, side, size, autoBorrow)
@@ -104,11 +101,11 @@ func createSpotOrder(symbol, side, size string) (string, error) {
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, string(payload))
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -146,14 +143,14 @@ func createSpotOrder(symbol, side, size string) (string, error) {
 func createMarginOrder(symbol, side, size string, autoBorrow bool) (string, error) {
 	// Prepare the request payload for margin order
 	order := map[string]interface{}{
-		"clientOid":     uuid.New().String(),
-		"symbol":        symbol,
-		"side":          side,
-		"type":          "market",
-		"size":          size,
-		"marginModel":   "cross",
-		"autoBorrow":    autoBorrow,
-		"tradeType":     "MARGIN_TRADE",
+		"clientOid":   uuid.New().String(),
+		"symbol":      symbol,
+		"side":        side,
+		"type":        "market",
+		"size":        size,
+		"marginModel": "cross",
+		"autoBorrow":  autoBorrow,
+		"tradeType":   "MARGIN_TRADE",
 	}
 
 	payload, err := json.Marshal(order)
@@ -171,11 +168,11 @@ func createMarginOrder(symbol, side, size string, autoBorrow bool) (string, erro
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, string(payload))
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -221,7 +218,7 @@ func signRequest(secret, timestamp, method, endpoint, body string) string {
 }
 
 func signPassphrase(passphrase string) string {
-	h := hmac.New(sha256.New, []byte(apiSecret))
+	h := hmac.New(sha256.New, []byte(kucoinAPISecret))
 	h.Write([]byte(passphrase))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }

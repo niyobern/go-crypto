@@ -15,7 +15,7 @@ import (
 
 func KucoinLimit(orderType string, symbol string, price, amount float64) {
 	if orderType == "SPOT" {
-		side := "sell" // Only buying is allowed for spot orders
+		side := "sell"                                   // Only buying is allowed for spot orders
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to buy
 
 		// Create the spot order
@@ -26,9 +26,9 @@ func KucoinLimit(orderType string, symbol string, price, amount float64) {
 			fmt.Printf("Spot order created successfully with ID: %s\n", orderID)
 		}
 	} else if orderType == "MARGIN" {
-		side := "buy"                   // Selling only
+		side := "buy"                                    // Selling only
 		size := strconv.FormatFloat(amount, 'f', -1, 64) // Amount to sell
-		autoBorrow := true  // Enable auto-borrowing for leverage
+		autoBorrow := true                               // Enable auto-borrowing for leverage
 
 		// Create the margin order
 		orderID, err := createMarginOrderLimit(symbol, side, size, autoBorrow, price)
@@ -66,11 +66,11 @@ func createSpotOrderLimit(symbol, side, size string, price float64) (string, err
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, string(payload))
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -108,15 +108,15 @@ func createSpotOrderLimit(symbol, side, size string, price float64) (string, err
 func createMarginOrderLimit(symbol, side, size string, autoBorrow bool, price float64) (string, error) {
 	// Prepare the request payload for margin order
 	order := map[string]interface{}{
-		"clientOid":     uuid.New().String(),
-		"symbol":        symbol,
-		"side":          side,
-		"type":          "limit",
-		"size":          size,
-		"price":         fmt.Sprintf("%f", price),
-		"marginModel":   "cross",
-		"autoBorrow":    autoBorrow,
-		"tradeType":     "MARGIN_TRADE",
+		"clientOid":   uuid.New().String(),
+		"symbol":      symbol,
+		"side":        side,
+		"type":        "limit",
+		"size":        size,
+		"price":       fmt.Sprintf("%f", price),
+		"marginModel": "cross",
+		"autoBorrow":  autoBorrow,
+		"tradeType":   "MARGIN_TRADE",
 	}
 
 	payload, err := json.Marshal(order)
@@ -134,11 +134,11 @@ func createMarginOrderLimit(symbol, side, size string, autoBorrow bool, price fl
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, string(payload))
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 

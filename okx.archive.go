@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 )
 
 type LoginArgs struct {
@@ -37,37 +39,46 @@ type SubscribeRequest struct {
 }
 
 type TickerData struct {
-    InstType   string `json:"instType"`
-    InstId     string `json:"instId"`
-    Last       string `json:"last"`
-    LastSz     string `json:"lastSz"`
-    AskPx      string `json:"askPx"`
-    AskSz      string `json:"askSz"`
-    BidPx      string `json:"bidPx"`
-    BidSz      string `json:"bidSz"`
-    Open24h    string `json:"open24h"`
-    High24h    string `json:"high24h"`
-    Low24h     string `json:"low24h"`
-    SodUtc0    string `json:"sodUtc0"`
-    SodUtc8    string `json:"sodUtc8"`
-    VolCcy24h  string `json:"volCcy24h"`
-    Vol24h     string `json:"vol24h"`
-    Ts         string `json:"ts"`
+	InstType  string `json:"instType"`
+	InstId    string `json:"instId"`
+	Last      string `json:"last"`
+	LastSz    string `json:"lastSz"`
+	AskPx     string `json:"askPx"`
+	AskSz     string `json:"askSz"`
+	BidPx     string `json:"bidPx"`
+	BidSz     string `json:"bidSz"`
+	Open24h   string `json:"open24h"`
+	High24h   string `json:"high24h"`
+	Low24h    string `json:"low24h"`
+	SodUtc0   string `json:"sodUtc0"`
+	SodUtc8   string `json:"sodUtc8"`
+	VolCcy24h string `json:"volCcy24h"`
+	Vol24h    string `json:"vol24h"`
+	Ts        string `json:"ts"`
 }
 
 type Message struct {
-    Arg  struct {
-        Channel string `json:"channel"`
-        InstId  string `json:"instId"`
-    } `json:"arg"`
-    Data []TickerData `json:"data"`
+	Arg struct {
+		Channel string `json:"channel"`
+		InstId  string `json:"instId"`
+	} `json:"arg"`
+	Data []TickerData `json:"data"`
 }
 
-func getSign(method, requestPath string, secret_key string) (string, string) {
-	t := time.Now().Unix()
-	timestamp := fmt.Sprintf("%d", t)
+func getSign(method, requestPath string) (string, string) {
+	// Load environment variables
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+
+	secretKey := os.Getenv("OKX_API_SECRET")
+	if secretKey == "" {
+		log.Fatal("Missing required OKX API secret in environment variables")
+	}
+
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	prehashString := timestamp + method + requestPath
-	secretKey := secret_key
 	h := hmac.New(sha256.New, []byte(secretKey))
 	h.Write([]byte(prehashString))
 	sign := base64.StdEncoding.EncodeToString(h.Sum(nil))
@@ -116,7 +127,7 @@ func okx(ctx context.Context, tickers chan TickerGeneral) {
 		}
 	}()
 
-	sign, timestamp := getSign("GET", "/users/self/verify", "301CC5DAD98447EBB610357C1E8BF2D2")
+	sign, timestamp := getSign("GET", "/users/self/verify")
 	loginArgs := LoginArgs{
 		APIKey:     "fe5ae325-5d72-441f-848d-7ee8abd495a9",
 		Passphrase: "Reform@781",
@@ -140,12 +151,12 @@ func okx(ctx context.Context, tickers chan TickerGeneral) {
 		return
 	}
 	symbols := []string{"XEC-USDT", "KAVA-USDT", "EDU-USDT", "AR-USDT", "HNT-USDT", "LUNA-USDT", "BSW-USDT", "BNC-USDT", "FLOW-USDT", "OP-USDT", "LISTA-USDT", "NTRN-USDT", "NVT-USDT", "HARD-USDT", "QI-USDT", "ZK-USDT", "VOXEL-USDT", "DYM-USDT", "TWT-USDT", "MBL-USDT", "ATEM-USDT", "BURGER-USDT", "TFUEL-USDT", "XAI-USDT", "NFP-USDT", "MAGIC-USDT", "CKB-USDT", "MOVR-USDT", "APT-USDT", "SUI-USDT", "RENDER-USDT", "NOT-USDT", "GMX-USDT", "GNS-USDT", "ROSE-USDT", "TIA-USDT", "EPX-USDT", "IO-USDT", "USTC-USDT", "OSMO-USDT", "TAO-USDT", "TNSR-USDT", "BONK-USDT", "SEI-USDT", "IOTA-USDT", "WIF-USDT", "JST-USDT", "ETHW-USDT", "FLR-USDT", "NEAR-USDT", "MANTA-USDT", "RUNE-USDT", "CELO-USDT", "SXP-USDT", "PYTH-USDT", "HBAR-USDT", "KLAY-USDT", "JTO-USDT", "KDA-USDT", "EGLD-USDT", "GFT-USDT", "STRAX-USDT", "VELO-USDT", "XYM-USDT", "NFT-USDT", "BOME-USDT", "JUP-USDT", "SCRT-USDT", "POLYX-USDT", "XNO-USDT", "ALPINE-USDT", "BB-USDT"}
-    args := make([]Subscription, 0)
+	args := make([]Subscription, 0)
 	for _, symbol := range symbols {
 		args = append(args, Subscription{Channel: "tickers", InstId: symbol})
 	}
 	subscribeRequest := SubscribeRequest{
-		Op: "subscribe",
+		Op:   "subscribe",
 		Args: args,
 	}
 	subscribeJson, err := json.Marshal(subscribeRequest)

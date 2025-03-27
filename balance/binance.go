@@ -129,7 +129,7 @@ func binanceFunding() ([]AccountBalance, error) {
 	}
 	// Handle errors from Binance API
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed: %s", string(body))
+		return nil, fmt.Errorf("binance funding API request failed: %s", string(body))
 	}
 
 	// Parse the response

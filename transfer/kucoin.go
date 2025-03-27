@@ -16,19 +16,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// KuCoin API credentials (ensure you fill these in)
-const (
-	apiKey        = "66aaab422dc99c0001efe888"
-	apiSecret     = "98fe74d7-6915-43b7-b95a-4346ab99ad80"
-	apiPassphrase = "Reform@781"
-	baseURL       = "https://api.kucoin.com"
+// KuCoin API configuration
+var (
+	baseURL = "https://api.kucoin.com"
 )
 
 // GetDepositAddress retrieves the deposit address for a given cryptocurrency on KuCoin.
 func KucoinGetDepositAddress(currency string) (DepositAdress, error) {
 	// Create the request
 	endpoint := "/api/v3/deposit-addresses"
-	
+
 	url := fmt.Sprintf("%s%s?currency=%s", baseURL, endpoint, currency)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -37,11 +34,11 @@ func KucoinGetDepositAddress(currency string) (DepositAdress, error) {
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "GET", fmt.Sprintf("%s?currency=%s", endpoint, currency), "")
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "GET", fmt.Sprintf("%s?currency=%s", endpoint, currency), "")
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "3")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -68,47 +65,37 @@ func KucoinGetDepositAddress(currency string) (DepositAdress, error) {
 	if resp.StatusCode != http.StatusOK || result["code"] != "200000" {
 		return DepositAdress{}, fmt.Errorf("error response: %s", string(body))
 	}
-	data, ok := result["data"].([]interface {})
+
+	data, ok := result["data"].([]interface{})
 	if !ok {
 		return DepositAdress{}, nil
 	}
-	if len(data) == 0 {
-		return kucoinCreateDepositAdress(currency)
-	}
 
-	// Extract the deposit address
 	adress := DepositAdress{
 		Adress: data[0].(map[string]interface{})["address"].(string),
-		Memo: data[0].(map[string]interface{})["memo"].(string),
-		Chain: data[0].(map[string]interface{})["chainName"].(string),
+		Memo:   data[0].(map[string]interface{})["memo"].(string),
+		Chain:  data[0].(map[string]interface{})["chainName"].(string),
 	}
 	return adress, nil
 }
 
-func kucoinCreateDepositAdress(currency string) (DepositAdress, error){
+func kucoinCreateDepositAdress(currency string) (DepositAdress, error) {
 	// Create the request
 	endpoint := "/api/v1/deposit-addresses"
-	url := baseURL + endpoint
 
-	reqBody := map[string]string{
-		"currency": currency,
-	}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return DepositAdress{}, fmt.Errorf("failed to marshal request body: %v", err)
-	}
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	url := fmt.Sprintf("%s%s", baseURL, endpoint)
+	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
 		return DepositAdress{}, err
 	}
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(jsonBody))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, "")
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -136,66 +123,62 @@ func kucoinCreateDepositAdress(currency string) (DepositAdress, error){
 		return DepositAdress{}, fmt.Errorf("error response: %s", string(body))
 	}
 
-	// Extract the deposit address
-	data, ok := result["data"].([]interface {})
+	data, ok := result["data"].([]interface{})
 	if !ok {
 		return DepositAdress{}, nil
 	}
-	if data == nil {
-		return kucoinCreateDepositAdress(currency)
-	}
-	// Extract the deposit address
+
 	adress := DepositAdress{
 		Adress: data[0].(map[string]interface{})["address"].(string),
-		Memo: data[0].(map[string]interface{})["memo"].(string),
-		Chain: data[0].(map[string]interface{})["chainName"].(string),
+		Memo:   data[0].(map[string]interface{})["memo"].(string),
+		Chain:  data[0].(map[string]interface{})["chainName"].(string),
 	}
 	return adress, nil
 }
 
 // TransferSpotToMargin transfers funds from the spot wallet to the margin wallet on KuCoin.
-func KucoinSpot2Margin(currency string, amount float64) (string, error){
+func KucoinSpot2Margin(currency string, amount float64) (string, error) {
 	return kucoinInternalTransfer(currency, "trade", "margin", amount)
 }
 
-func KucoinMargin2spot(currency string, amount float64) (string, error){
+func KucoinMargin2spot(currency string, amount float64) (string, error) {
 	return kucoinInternalTransfer(currency, "margin", "trade", amount)
 }
 
-func KucoinFunding2spot(currency string, amount float64) (string, error){
+func KucoinFunding2spot(currency string, amount float64) (string, error) {
 	return kucoinInternalTransfer(currency, "main", "trade", amount)
 }
 
 func kucoinInternalTransfer(currency, from, to string, amount float64) (string, error) {
 	// Prepare the request payload
 	transfer := map[string]interface{}{
-		"currency":     currency,
-		"amount":       strconv.FormatFloat(amount, 'f', -1, 64),
-		"from":         from,
-		"to":           to, 
-		"clientOid":    uuid.New().String(),
+		"currency":  currency,
+		"amount":    strconv.FormatFloat(amount, 'f', -1, 64),
+		"from":      from,
+		"to":        to,
+		"clientOid": uuid.New().String(),
 	}
 
-	payload, err := json.Marshal(transfer)
+	jsonBody, err := json.Marshal(transfer)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal request body: %v", err)
 	}
 
 	// Create the request
 	endpoint := "/api/v2/accounts/inner-transfer"
-	url := baseURL + endpoint
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	url := fmt.Sprintf("%s%s", baseURL, endpoint)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
 	}
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, string(jsonBody))
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -233,7 +216,7 @@ func kucoinInternalTransfer(currency, from, to string, amount float64) (string, 
 }
 
 func TransferFromKucoinToBinance(currency string, amount float64) (string, error) {
-	// Get the Binance deposit address, tag (memo), and currency
+	// Get Binance deposit address
 	binanceAdress, err := BinanceDepositAdress(currency, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to get Binance deposit address: %v", err)
@@ -241,35 +224,35 @@ func TransferFromKucoinToBinance(currency string, amount float64) (string, error
 
 	// Prepare the request payload for the KuCoin withdrawal
 	withdrawal := map[string]interface{}{
-		"currency":       currency,
-		"amount":         strconv.FormatFloat(amount, 'f', -1, 64),
-		"address":        binanceAdress.Adress, // Binance deposit address
-		"memo":           binanceAdress.Memo,            // Tag or memo (if applicable)
-		"isInner":        false,          // Indicates external transfer (not within KuCoin)
-		"clientOid":      uuid.New().String(),
-		"remark":         "Transfer to Binance", // Optional remark
+		"currency":  currency,
+		"amount":    strconv.FormatFloat(amount, 'f', -1, 64),
+		"address":   binanceAdress.Adress,
+		"memo":      binanceAdress.Memo,
+		"isInner":   false,
+		"clientOid": uuid.New().String(),
+		"remark":    "Transfer to Binance",
 	}
 
-	payload, err := json.Marshal(withdrawal)
+	jsonBody, err := json.Marshal(withdrawal)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal request body: %v", err)
 	}
 
 	// Create the request
 	endpoint := "/api/v1/withdrawals"
-	url := baseURL + endpoint
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	url := fmt.Sprintf("%s%s", baseURL, endpoint)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
 	}
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, string(jsonBody))
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
 	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -303,35 +286,34 @@ func TransferFromKucoinToBinance(currency string, amount float64) (string, error
 }
 
 func KucoinRepayLoan(currency string, amount float64) (string, error) {
-	log.Println(amount)
 	// Prepare the request payload
 	repay := map[string]interface{}{
-		"currency": currency,
-		"size":   strconv.FormatFloat(amount, 'f', -1, 64),
+		"currency":  currency,
+		"size":      strconv.FormatFloat(amount, 'f', -1, 64),
 		"clientOid": uuid.New().String(),
 	}
 
-	payload, err := json.Marshal(repay)
+	jsonBody, err := json.Marshal(repay)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal request body: %v", err)
 	}
 
 	// Create the request
-	endpoint := "/api/v3/margin/repay"
-	url := baseURL + endpoint
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	endpoint := "/api/v1/margin/repay"
+	url := fmt.Sprintf("%s%s", baseURL, endpoint)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
 	}
 
 	// Add headers
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	signature := signRequest(apiSecret, timestamp, "POST", endpoint, string(payload))
-	req.Header.Set("KC-API-KEY", apiKey)
+	signature := signRequest(kucoinAPISecret, timestamp, "POST", endpoint, string(jsonBody))
+	req.Header.Set("KC-API-KEY", kucoinAPIKey)
 	req.Header.Set("KC-API-SIGN", signature)
 	req.Header.Set("KC-API-TIMESTAMP", timestamp)
-	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(apiPassphrase))
-	req.Header.Set("KC-API-KEY-VERSION", "3")
+	req.Header.Set("KC-API-PASSPHRASE", signPassphrase(kucoinPassphrase))
+	req.Header.Set("KC-API-KEY-VERSION", "2")
 	req.Header.Set("Content-Type", "application/json")
 
 	// Execute the request
@@ -378,4 +360,3 @@ func signPassphrase(passphrase string) string {
 	h.Write([]byte(passphrase))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
-
